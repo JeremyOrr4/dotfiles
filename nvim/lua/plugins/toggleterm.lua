@@ -1,25 +1,26 @@
 return {
-  "akinsho/toggleterm.nvim",
-  version = "*",
-  config = function()
-    require("toggleterm").setup({
-      size = 100,
-      open_mapping = [[<C-t>]],
-      direction = "horizontal",
-      close_on_exit = true,
-      shell = vim.o.shell,
-    })
+  { "akinsho/toggleterm.nvim", enabled = false },
 
-    local Terminal = require("toggleterm.terminal").Terminal
-    local opencode = Terminal:new({
-      cmd = "opencode",
-      direction = "vertical",
-      size = 10,
-      close_on_exit = true,
-    })
-
-    vim.keymap.set("n", "<leader>oc", function()
-      opencode:toggle()
-    end, { desc = "Toggle OpenCode" })
-  end,
+  {
+    "folke/snacks.nvim",
+    keys = {
+      {
+        "<C-t>",
+        function()
+          Snacks.terminal.focus(nil, { cwd = vim.fn.getcwd() })
+        end,
+        mode = { "n", "t" },
+        desc = "Toggle Terminal",
+      },
+    },
+    opts = function(_, opts)
+      opts.terminal = vim.tbl_deep_extend("force", opts.terminal or {}, {
+        win = {
+          position = "bottom",
+          height = 0.2,
+          enter = true,
+        },
+      })
+    end,
+  },
 }
