@@ -15,4 +15,9 @@ mkdir -p "$DOTFILES/zsh"
 cp "$HOME/.zshrc" "$DOTFILES/zsh/.zshrc"
 cp -R "$HOME/.zsh_modules" "$DOTFILES/zsh/"
 
+echo "== Syncing OpenCode =="
+mkdir -p "$DOTFILES/opencode"
+cp "$HOME/.config/opencode/opencode.json" "$DOTFILES/opencode/"
+
+
 echo "Done."
