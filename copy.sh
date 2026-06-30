@@ -1,6 +1,6 @@
 #!/bin/zsh
 
-DOTFILES="$HOME/Documents/jer-work/code/dotfiles"
+DOTFILES="$(cd "$(dirname "$0")" && pwd)"
 
 echo "== Syncing Kitty =="
 mkdir -p "$DOTFILES/kitty"

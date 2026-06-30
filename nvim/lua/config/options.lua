@@ -4,9 +4,10 @@
 
 vim.opt.relativenumber = true      -- relative line numbers (great for jumping)
 vim.opt.scrolloff = 8              -- keep 8 lines above/below cursor
-vim.opt.wrap = false               -- no line wrapping
+vim.opt.wrap = true               -- no line wrapping
 vim.opt.clipboard = "unnamedplus"  -- use system clipboard
 vim.opt.timeoutlen = 300           -- faster key sequence detection
+vim.o.autoread = true
 
 -- Auto-reload files changed externally (e.g. by OpenCode)
 vim.o.autoread = true
