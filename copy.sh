@@ -1,4 +1,5 @@
 #!/bin/zsh
+set -e
 
 DOTFILES="$(cd "$(dirname "$0")" && pwd)"
 
@@ -19,5 +20,8 @@ echo "== Syncing OpenCode =="
 mkdir -p "$DOTFILES/opencode"
 cp "$HOME/.config/opencode/opencode.json" "$DOTFILES/opencode/"
 
+echo "== Syncing Tmux =="
+mkdir -p "$DOTFILES/tmux"
+cp "$HOME/.config/tmux/tmux.conf" "$DOTFILES/tmux/tmux.conf"
 
 echo "Done."

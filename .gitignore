@@ -24,3 +24,5 @@
 
 # Logs
 *.log
+
+tmux/plugins/

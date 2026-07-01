@@ -8,6 +8,7 @@ vim.opt.wrap = true               -- no line wrapping
 vim.opt.clipboard = "unnamedplus"  -- use system clipboard
 vim.opt.timeoutlen = 300           -- faster key sequence detection
 vim.o.autoread = true
+vim.opt.updatetime = 500
 
 -- Auto-reload files changed externally (e.g. by OpenCode)
 vim.o.autoread = true

@@ -1,4 +1,5 @@
 #!/usr/bin/env sh
+set -e
 
 DOTFILES="$(cd "$(dirname "$0")" && pwd)"
 
@@ -17,5 +18,9 @@ cp -R "$DOTFILES/zsh/.zsh_modules" "$HOME/"
 echo "== Restoring OpenCode =="
 mkdir -p "$HOME/.config/opencode"
 cp "$DOTFILES/opencode/opencode.json" "$HOME/.config/opencode/"
+
+echo "== Restoring Tmux =="
+mkdir -p "$HOME/.config/tmux"
+cp "$DOTFILES/tmux/tmux.conf" "$HOME/.config/tmux/tmux.conf"
 
 echo "Done."
