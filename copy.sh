@@ -19,7 +19,6 @@ cp -R "$HOME/.zsh_modules" "$DOTFILES/zsh/"
 echo "== Syncing OpenCode =="
 mkdir -p "$DOTFILES/opencode"
 cp "$HOME/.config/opencode/opencode.json" "$DOTFILES/opencode/"
-
 echo "== Syncing Tmux =="
 mkdir -p "$DOTFILES/tmux"
 cp "$HOME/.config/tmux/tmux.conf" "$DOTFILES/tmux/tmux.conf"
