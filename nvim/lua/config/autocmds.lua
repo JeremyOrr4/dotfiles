@@ -8,10 +8,11 @@
 -- e.g. vim.api.nvim_del_augroup_by_name("lazyvim_wrap_spell")
 
 vim.api.nvim_create_autocmd({ "FocusGained", "TermClose", "TermLeave" }, {
-  group = augroup("checktime"),
+  group = vim.api.nvim_create_augroup("checktime", { clear = true }),
   callback = function()
-    if vim.o.buftype ~= "nofile" then
+    if vim.bo.buftype ~= "nofile" then
       vim.cmd("checktime")
     end
   end,
 })
+
