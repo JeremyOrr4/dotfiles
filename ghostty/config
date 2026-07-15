@@ -1,7 +1,36 @@
+# ─────────────────────────────────────────────
+# Font
+# ─────────────────────────────────────────────
 font-family = JetBrainsMono Nerd Font
 font-size = 13
 
+# ─────────────────────────────────────────────
+# Window
+# ─────────────────────────────────────────────
 window-padding-x = 10
 window-padding-y = 10
+window-step-resize = true
+macos-titlebar-style = hidden
+# background-opacity = 0.95
 
-theme = catppuccin-mocha
+# ─────────────────────────────────────────────
+# Cursor
+# ─────────────────────────────────────────────
+cursor-style = block
+cursor-style-blink = false
+# cursor-color = #ffffff
+
+# ─────────────────────────────────────────────
+# Tabs
+# ─────────────────────────────────────────────
+tab-bar-position = top
+
+# ─────────────────────────────────────────────
+# Theme
+# ─────────────────────────────────────────────
+theme = Catppuccin Mocha
+
+# ─────────────────────────────────────────────
+# Keybindings
+# ─────────────────────────────────────────────
+keybind = global:cmd+shift+f=toggle_fullscreen
