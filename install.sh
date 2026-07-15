@@ -66,5 +66,9 @@ echo
 echo "== Tmux =="
 backup_and_link_dir "$DOTFILES/tmux" "$HOME/.config/tmux"
 
+echo "
+== Ghostty =="
+backup_and_link_dir "$DOTFILES/ghostty" "$HOME/.config/ghostty"
+
 echo
 echo "Done."
