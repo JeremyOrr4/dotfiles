@@ -7,10 +7,9 @@ vim.opt.scrolloff = 8              -- keep 8 lines above/below cursor
 vim.opt.wrap = true               -- no line wrapping
 vim.opt.clipboard = "unnamedplus"  -- use system clipboard
 vim.opt.timeoutlen = 300           -- faster key sequence detection
-vim.o.autoread = true
-vim.opt.updatetime = 500
+vim.opt.updatetime = 300  -- faster external change detection (300ms)
 
--- Auto-reload files changed externally (e.g. by OpenCode)
+-- Auto-reload files changed externally (e.g. by AI agents, OpenCode, git)
 vim.o.autoread = true
 vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI" }, {
   command = "checktime",
