@@ -25,4 +25,4 @@
 # Logs
 *.log
 
-tmux/.config/tmux/plugins/
+**/plugins/**/.git/
