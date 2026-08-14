@@ -8,5 +8,6 @@
     "grep": "allow",
     "edit": "ask",
     "external_directory": "deny",
+    "bash": "deny"
   }
 }
