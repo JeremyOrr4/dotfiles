@@ -27,6 +27,12 @@ Personal dotfiles managed with GNU Stow. Works on macOS and Linux.
    ./install.sh
    ```
 
+To also install the required apps (tmux, nvim, zsh, starship):
+
+```sh
+./apps.sh
+```
+
 The installer stows every package automatically. You can also manage packages
 individually:
 
@@ -37,6 +43,9 @@ stow -D zsh     # unstow a single package
 
 ## What's included
 
+- `apps.sh` — installs required apps (tmux, nvim, zsh, starship):
+  Homebrew on macOS, apt on Linux (starship via the official curl installer
+  since it has no apt package)
 - `ghostty` — Ghostty terminal config
 - `kitty` — Kitty terminal config
 - `nvim` — Neovim config (LazyVim-based, plugins under `lua/plugins`)
