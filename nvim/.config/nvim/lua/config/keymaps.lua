@@ -27,3 +27,16 @@ vim.keymap.set("n", "<leader>fd", function()
 
   vim.notify("Diffing against " .. path)
 end, { desc = "Diff against clipboard path" })
+
+vim.api.nvim_create_autocmd("LspAttach", {
+  callback = function(args)
+    local opts = { buffer = args.buf, silent = true }
+
+    vim.keymap.set("n", "gi", vim.lsp.buf.incoming_calls, vim.tbl_extend("force", opts, {
+      desc = "LSP incoming calls",
+    }))
+    vim.keymap.set("n", "go", vim.lsp.buf.outgoing_calls, vim.tbl_extend("force", opts, {
+      desc = "LSP outgoing calls",
+    }))
+  end,
+})
