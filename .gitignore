@@ -26,3 +26,5 @@
 *.log
 
 tmux/.config/tmux/plugins/
+
+docs/

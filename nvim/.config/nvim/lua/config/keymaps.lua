@@ -30,13 +30,46 @@ end, { desc = "Diff against clipboard path" })
 
 vim.api.nvim_create_autocmd("LspAttach", {
   callback = function(args)
-    local opts = { buffer = args.buf, silent = true }
+    -- LazyVim owns the standard definition/reference/symbol mappings. Add
+    -- call hierarchy using the actual LSP requests when the server supports it.
+    local client_id = args.data.client_id
+    local client = vim.lsp.get_client_by_id(client_id)
+    if not client or not client:supports_method("textDocument/prepareCallHierarchy", args.buf) then
+      return
+    end
 
-    vim.keymap.set("n", "gi", vim.lsp.buf.incoming_calls, vim.tbl_extend("force", opts, {
-      desc = "LSP incoming calls",
-    }))
-    vim.keymap.set("n", "go", vim.lsp.buf.outgoing_calls, vim.tbl_extend("force", opts, {
-      desc = "LSP outgoing calls",
-    }))
+    local function call_hierarchy(direction)
+      local position_params = vim.lsp.util.make_position_params(0, client.offset_encoding)
+      vim.lsp.buf_request(args.buf, "textDocument/prepareCallHierarchy", position_params, function(err, items)
+        if err then
+          vim.notify(err.message or "Call hierarchy request failed", vim.log.levels.WARN)
+          return
+        end
+        if not items or vim.tbl_isempty(items) then
+          vim.notify("No call hierarchy item at cursor", vim.log.levels.INFO)
+          return
+        end
+
+        local method = direction == "incoming" and "callHierarchy/incomingCalls" or "callHierarchy/outgoingCalls"
+        vim.lsp.buf_request(args.buf, method, { item = items[1] }, function(call_err, calls)
+          if call_err then
+            vim.notify(call_err.message or "Call hierarchy request failed", vim.log.levels.WARN)
+            return
+          end
+          if not calls or vim.tbl_isempty(calls) then
+            vim.notify("No " .. direction .. " calls found", vim.log.levels.INFO)
+            return
+          end
+          vim.lsp.util.show_document(calls[1].from and calls[1].from.uri and calls[1].from or calls[1].to, client.offset_encoding, { focus = true })
+        end, client_id)
+      end, client_id)
+    end
+
+    vim.keymap.set("n", "gi", function()
+      call_hierarchy("incoming")
+    end, { buffer = args.buf, silent = true, desc = "LSP incoming calls" })
+    vim.keymap.set("n", "go", function()
+      call_hierarchy("outgoing")
+    end, { buffer = args.buf, silent = true, desc = "LSP outgoing calls" })
   end,
 })
