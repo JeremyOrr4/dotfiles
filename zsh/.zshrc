@@ -9,3 +9,9 @@ if [[ -d "$ZSH_MODULES_DIR" ]]; then
     source "$config_file"
   done
 fi
+
+# Go-installed command-line tools
+case ":$PATH:" in
+  *":$HOME/go/bin:"*) ;;
+  *) export PATH="$HOME/go/bin:$PATH" ;;
+esac
