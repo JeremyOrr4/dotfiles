@@ -22,6 +22,17 @@ local ignored_exclude = {
 
 return {
   "folke/snacks.nvim",
+  keys = {
+    {
+      "<leader>e",
+      function()
+        local name = vim.api.nvim_buf_get_name(0)
+        local root = name ~= "" and (vim.fs.root(name, ".git") or vim.fs.dirname(name)) or vim.fn.getcwd()
+        Snacks.explorer({ cwd = root })
+      end,
+      desc = "Explorer (Git root)",
+    },
+  },
   opts = {
     picker = {
       sources = {
