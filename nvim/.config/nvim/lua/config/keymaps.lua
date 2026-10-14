@@ -39,8 +39,14 @@ vim.api.nvim_create_autocmd("LspAttach", {
     end
 
     local function call_hierarchy(direction)
+      local method = direction == "incoming" and "callHierarchy/incomingCalls" or "callHierarchy/outgoingCalls"
+      if not client:supports_method(method, args.buf) then
+        vim.notify("LSP server does not support " .. direction .. " call hierarchy", vim.log.levels.INFO)
+        return
+      end
+
       local position_params = vim.lsp.util.make_position_params(0, client.offset_encoding)
-      vim.lsp.buf_request(args.buf, "textDocument/prepareCallHierarchy", position_params, function(err, items)
+      client:request("textDocument/prepareCallHierarchy", position_params, function(err, items)
         if err then
           vim.notify(err.message or "Call hierarchy request failed", vim.log.levels.WARN)
           return
@@ -50,8 +56,7 @@ vim.api.nvim_create_autocmd("LspAttach", {
           return
         end
 
-        local method = direction == "incoming" and "callHierarchy/incomingCalls" or "callHierarchy/outgoingCalls"
-        vim.lsp.buf_request(args.buf, method, { item = items[1] }, function(call_err, calls)
+        client:request(method, { item = items[1] }, function(call_err, calls)
           if call_err then
             vim.notify(call_err.message or "Call hierarchy request failed", vim.log.levels.WARN)
             return
@@ -60,9 +65,12 @@ vim.api.nvim_create_autocmd("LspAttach", {
             vim.notify("No " .. direction .. " calls found", vim.log.levels.INFO)
             return
           end
-          vim.lsp.util.show_document(calls[1].from and calls[1].from.uri and calls[1].from or calls[1].to, client.offset_encoding, { focus = true })
-        end, client_id)
-      end, client_id)
+          local item = calls[1].from or calls[1].to
+          if item then
+            vim.lsp.util.show_document(item, client.offset_encoding, { focus = true })
+          end
+        end, args.buf)
+      end, args.buf)
     end
 
     vim.keymap.set("n", "gi", function()

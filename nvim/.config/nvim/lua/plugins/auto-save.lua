@@ -31,8 +31,5 @@ return {
 
     -- Don't auto-write for these filetypes
     enabled = true,
-    execution_message = {
-      enabled = false,  -- set to true if you want a message when auto-saving
-    },
   },
 }
