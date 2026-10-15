@@ -50,6 +50,7 @@ stow -D zsh     # unstow a single package
 - `kitty` — Kitty terminal config
 - `nvim` — Neovim config (LazyVim-based, plugins under `lua/plugins`)
 - `opencode` — opencode CLI config
+- `pi` — Pi user-level settings and the Ollama model discovery extension
 - `tmux` — tmux config plus vendored plugins under `plugins/`
 - `zsh` — `.zshrc` and modular shell scripts under `.zsh_modules`
 

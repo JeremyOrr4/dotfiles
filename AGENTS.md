@@ -18,6 +18,32 @@ explicitly asked.
 - Ask before installing software, changing machine state, or performing remote
   actions such as GitHub operations.
 
+## GNU Stow workflow
+
+- A package mirrors paths under `$HOME`; for example,
+  `pi/.pi/agent/settings.json` maps to `~/.pi/agent/settings.json`.
+- Before changing links, check `git status` and inspect the current target files.
+  Never assume an existing target is disposable.
+- Preview an individual package from the repository root before applying it:
+
+  ```sh
+  stow -n -v -t "$HOME" <package>
+  ```
+
+- If Stow reports conflicts, compare the target and package versions. Back up
+  target files outside the repository before moving or merging them. Preserve
+  unique local data and credentials locally; do not copy credentials into a
+  package. Avoid `stow --adopt`, which can move target files into and overwrite
+  package content.
+- After resolving conflicts, rerun the preview, then apply only the requested
+  package with `stow -v -t "$HOME" <package>`. Use `./install.sh` only when the
+  user asks to stow all packages; it changes links for every discovered
+  package.
+- Verify each expected target is a symlink into this checkout with `ls -l` or
+  `readlink`, then check `git status` and `git diff --check`. A dry-run removal
+  can preview cleanup; apply `stow -D -t "$HOME" <package>` only when removal
+  is requested. Stow removes links, not the package source files.
+
 ## `nvim/` — Neovim
 
 - Config root: `nvim/.config/nvim/`; this is a LazyVim config using `lazy.nvim`.
