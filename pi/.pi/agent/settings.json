@@ -2,5 +2,6 @@
   "theme": "dark",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-6-luna",
-  "defaultThinkingLevel": "low"
+  "defaultThinkingLevel": "low",
+  "lastChangelogVersion": "1.2.0"
 }
