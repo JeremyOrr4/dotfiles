@@ -2,6 +2,9 @@
   "theme": "dark",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-6-luna",
-  "defaultThinkingLevel": "low",
-  "lastChangelogVersion": "1.2.0"
+  "defaultThinkingLevel": "high",
+  "lastChangelogVersion": "1.3.0",
+  "packages": [
+    "npm:pi-subagents"
+  ]
 }
