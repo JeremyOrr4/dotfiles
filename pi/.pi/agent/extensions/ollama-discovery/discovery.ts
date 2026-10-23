@@ -1,7 +1,27 @@
-export const DEFAULT_OLLAMA_BASE_URL = "http://host.docker.internal:11434";
+// Tried in order when OLLAMA_BASE_URL is unset: the Caged/Docker host, then a native local server.
+export const DEFAULT_OLLAMA_BASE_URLS = ["http://host.docker.internal:11434", "http://127.0.0.1:11434"];
+export const DEFAULT_OLLAMA_BASE_URL = DEFAULT_OLLAMA_BASE_URLS[0];
 export const DEFAULT_CONTEXT_WINDOW = 4096;
-export const DEFAULT_MAX_TOKENS = 2048;
 export const REQUEST_TIMEOUT_MS = 1500;
+
+// Ollama's /v1 endpoint reads `max_tokens` (not `max_completion_tokens`) and has no `store`.
+// Chat templates know `system` but not the `developer` role pi uses for OpenAI reasoning models.
+export const OLLAMA_COMPAT = {
+  supportsStore: false,
+  supportsDeveloperRole: false,
+  maxTokensField: "max_tokens",
+};
+
+// Ollama accepts reasoning_effort "none", "low", "medium", or "high"; pi has no other levels to map.
+export const OLLAMA_THINKING_LEVEL_MAP = { off: "none", minimal: null };
+
+export const CONTEXT_SOURCES = {
+  modelfile: "Modelfile num_ctx",
+  running: "running model",
+  configured: "OLLAMA_CONTEXT_LENGTH",
+  trained: "trained length",
+  fallback: "fallback",
+};
 
 export function normalizeOllamaBaseUrl(value = DEFAULT_OLLAMA_BASE_URL) {
   let url;
@@ -19,6 +39,11 @@ export function normalizeOllamaBaseUrl(value = DEFAULT_OLLAMA_BASE_URL) {
   }
 
   return url.origin;
+}
+
+function positiveInteger(value) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function makeAbortController(timeoutMs) {
@@ -55,12 +80,28 @@ function modelNames(tags) {
   }).filter(Boolean))];
 }
 
+// `/api/ps` reports the context each loaded model actually runs with. Older servers omit it.
+async function runningContextLengths(fetchImpl, origin, timeoutMs) {
+  const contexts = new Map();
+  try {
+    const ps = await fetchJson(fetchImpl, `${origin}/api/ps`, { timeoutMs });
+    for (const model of Array.isArray(ps?.models) ? ps.models : []) {
+      const contextLength = positiveInteger(model?.context_length);
+      const name = typeof model?.name === "string" ? model.name : model?.model;
+      if (contextLength && typeof name === "string") contexts.set(name, contextLength);
+    }
+  } catch {
+    // Running-model context is optional; discovery falls back to configured or trained lengths.
+  }
+  return contexts;
+}
+
 function findContextLength(value) {
   if (!value || typeof value !== "object") return undefined;
   for (const [key, nested] of Object.entries(value)) {
     if (key === "context_length" || key.endsWith(".context_length")) {
-      const parsed = Number(nested);
-      if (Number.isSafeInteger(parsed) && parsed > 0) return parsed;
+      const parsed = positiveInteger(nested);
+      if (parsed) return parsed;
     }
   }
   for (const nested of Object.values(value)) {
@@ -70,16 +111,36 @@ function findContextLength(value) {
   return undefined;
 }
 
-function configuredContextLength(show) {
+function trainedContextLength(show) {
+  const info = show?.model_info;
+  const architecture = info?.["general.architecture"];
+  return positiveInteger(info?.[`${architecture}.context_length`]) ?? findContextLength(info);
+}
+
+function modelfileContextLength(show) {
   const fromParameters = typeof show?.parameters === "string"
     ? show.parameters.match(/^num_ctx\s+(\d+)\s*$/m)?.[1]
     : undefined;
   const fromModelfile = typeof show?.modelfile === "string"
     ? show.modelfile.match(/^PARAMETER\s+num_ctx\s+(\d+)\s*$/m)?.[1]
     : undefined;
-  const configured = Number(fromParameters ?? fromModelfile);
-  if (Number.isSafeInteger(configured) && configured > 0) return configured;
-  return findContextLength(show?.model_info) ?? DEFAULT_CONTEXT_WINDOW;
+  return positiveInteger(fromParameters ?? fromModelfile);
+}
+
+// Ollama's /v1 endpoint ignores a request num_ctx, so the server decides the context: a Modelfile
+// num_ctx, else OLLAMA_CONTEXT_LENGTH, capped at the trained length. A loaded model reports its own.
+function resolveContextWindow(show, runningContext, configuredContext) {
+  const trained = trainedContextLength(show);
+  const candidates = [
+    [modelfileContextLength(show), CONTEXT_SOURCES.modelfile],
+    [runningContext, CONTEXT_SOURCES.running],
+    [configuredContext, CONTEXT_SOURCES.configured],
+  ];
+  for (const [value, source] of candidates) {
+    if (value) return { contextWindow: trained ? Math.min(value, trained) : value, contextSource: source };
+  }
+  if (trained) return { contextWindow: trained, contextSource: CONTEXT_SOURCES.trained };
+  return { contextWindow: DEFAULT_CONTEXT_WINDOW, contextSource: CONTEXT_SOURCES.fallback };
 }
 
 async function mapWithConcurrency(items, limit, mapper) {
@@ -100,13 +161,15 @@ export async function discoverOllamaModels({
   baseUrl = DEFAULT_OLLAMA_BASE_URL,
   fetchImpl = globalThis.fetch,
   timeoutMs = REQUEST_TIMEOUT_MS,
+  contextLength,
 } = {}) {
   const origin = normalizeOllamaBaseUrl(baseUrl);
   if (typeof fetchImpl !== "function") throw new Error("Fetch is unavailable in this Pi runtime");
 
   const tags = await fetchJson(fetchImpl, `${origin}/api/tags`, { timeoutMs });
   const names = modelNames(tags);
-  return mapWithConcurrency(names, 4, async (name) => {
+  const running = await runningContextLengths(fetchImpl, origin, timeoutMs);
+  const discovered = await mapWithConcurrency(names, 4, async (name) => {
     let show;
     try {
       show = await fetchJson(fetchImpl, `${origin}/api/show`, {
@@ -118,49 +181,84 @@ export async function discoverOllamaModels({
       // A tag remains usable even if Ollama cannot return its optional metadata.
     }
 
-    const contextWindow = configuredContextLength(show);
-    const capabilities = Array.isArray(show?.capabilities) ? show.capabilities : [];
+    // Older servers omit capabilities; treat those models as capable chat models.
+    const capabilities = Array.isArray(show?.capabilities) ? show.capabilities : undefined;
+    if (capabilities && !capabilities.includes("completion")) return { skipped: name };
+
+    const { contextWindow, contextSource } = resolveContextWindow(show, running.get(name), contextLength);
+    const reasoning = capabilities?.includes("thinking") === true;
+    const tools = capabilities ? capabilities.includes("tools") : undefined;
     return {
-      id: name,
-      name,
-      reasoning: false,
-      input: capabilities.includes("vision") ? ["text", "image"] : ["text"],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow,
-      maxTokens: Math.min(DEFAULT_MAX_TOKENS, contextWindow),
+      model: {
+        id: name,
+        name: tools === false ? `${name} (no tool support)` : name,
+        reasoning,
+        ...(reasoning && { thinkingLevelMap: { ...OLLAMA_THINKING_LEVEL_MAP } }),
+        input: capabilities?.includes("vision") ? ["text", "image"] : ["text"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow,
+        // Pi caps each request's max_tokens to the context left after the prompt.
+        maxTokens: contextWindow,
+        compat: { ...OLLAMA_COMPAT },
+      },
+      details: { id: name, contextSource, tools },
     };
   });
+
+  return {
+    models: discovered.filter((entry) => entry.model).map((entry) => entry.model),
+    details: discovered.filter((entry) => entry.details).map((entry) => entry.details),
+    skipped: discovered.filter((entry) => entry.skipped).map((entry) => entry.skipped),
+  };
+}
+
+// Returns the first candidate origin, in order, that answers `/api/version`.
+async function firstReachable(candidates, fetchImpl, timeoutMs) {
+  if (candidates.length === 1) return candidates[0];
+  const probes = await Promise.allSettled(candidates.map((origin) =>
+    fetchJson(fetchImpl, `${origin}/api/version`, { timeoutMs })));
+  const index = probes.findIndex((probe) => probe.status === "fulfilled");
+  return index === -1 ? undefined : candidates[index];
 }
 
 export async function discoverOllamaSafely(options = {}) {
-  const rawBaseUrl = options.baseUrl ?? DEFAULT_OLLAMA_BASE_URL;
-  let baseUrl;
+  const { fetchImpl = globalThis.fetch, timeoutMs = REQUEST_TIMEOUT_MS } = options;
+  const empty = { models: [], details: [], skipped: [], reachable: false };
+  const warnings = [];
+
+  let candidates;
   try {
-    baseUrl = normalizeOllamaBaseUrl(rawBaseUrl);
+    candidates = options.baseUrl ? [normalizeOllamaBaseUrl(options.baseUrl)] : DEFAULT_OLLAMA_BASE_URLS;
   } catch (error) {
     return {
+      ...empty,
       baseUrl: DEFAULT_OLLAMA_BASE_URL,
-      models: [],
       warning: `${error.message}. Using no discovered Ollama models.`,
     };
   }
 
+  let contextLength;
+  if (options.contextLength !== undefined && options.contextLength !== "") {
+    contextLength = positiveInteger(options.contextLength);
+    if (!contextLength) warnings.push("OLLAMA_CONTEXT_LENGTH must be a positive integer; ignoring it.");
+  }
+
+  const baseUrl = await firstReachable(candidates, fetchImpl, timeoutMs);
+  if (!baseUrl) {
+    warnings.unshift(`Could not reach Ollama at ${candidates.join(" or ")}. Check that Ollama is running and reachable from this container; set OLLAMA_BASE_URL to override the address.`);
+    return { ...empty, baseUrl: candidates[0], warning: warnings.join(" ") };
+  }
+
   try {
-    const models = await discoverOllamaModels({ ...options, baseUrl });
-    if (models.length === 0) {
-      return {
-        baseUrl,
-        models,
-        warning: `Ollama responded at ${baseUrl}, but has no local models. Pull one with: ollama pull <model>`,
-      };
+    const discovery = await discoverOllamaModels({ fetchImpl, timeoutMs, baseUrl, contextLength });
+    if (discovery.models.length === 0) {
+      const what = discovery.skipped.length > 0 ? "no chat models" : "no local models";
+      warnings.unshift(`Ollama responded at ${baseUrl}, but has ${what}. Pull one with: ollama pull <model>`);
     }
-    return { baseUrl, models };
+    return { ...discovery, baseUrl, reachable: true, warning: warnings.join(" ") || undefined };
   } catch (error) {
     const reason = error?.name === "AbortError" ? "the request timed out" : error?.message || "the request failed";
-    return {
-      baseUrl,
-      models: [],
-      warning: `Could not discover Ollama models at ${baseUrl} (${reason}). Check that Ollama is running and reachable from this container; set OLLAMA_BASE_URL to override the address.`,
-    };
+    warnings.unshift(`Could not discover Ollama models at ${baseUrl} (${reason}). Check that Ollama is running and reachable from this container; set OLLAMA_BASE_URL to override the address.`);
+    return { ...empty, baseUrl, warning: warnings.join(" ") };
   }
 }
