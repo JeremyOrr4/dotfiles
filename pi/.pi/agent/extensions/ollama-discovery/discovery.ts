@@ -3,6 +3,8 @@ export const DEFAULT_OLLAMA_BASE_URLS = ["http://host.docker.internal:11434", "h
 export const DEFAULT_OLLAMA_BASE_URL = DEFAULT_OLLAMA_BASE_URLS[0];
 export const DEFAULT_CONTEXT_WINDOW = 4096;
 export const REQUEST_TIMEOUT_MS = 1500;
+// Loading a large model from disk can take minutes.
+export const WARM_UP_TIMEOUT_MS = 5 * 60_000;
 
 // Ollama's /v1 endpoint reads `max_tokens` (not `max_completion_tokens`) and has no `store`.
 // Chat templates know `system` but not the `developer` role pi uses for OpenAI reasoning models.
@@ -210,6 +212,19 @@ export async function discoverOllamaModels({
     details: discovered.filter((entry) => entry.details).map((entry) => entry.details),
     skipped: discovered.filter((entry) => entry.skipped).map((entry) => entry.skipped),
   };
+}
+
+// `/api/generate` with no prompt loads the model into memory without generating anything. It uses the
+// server's default options, as Ollama's /v1 endpoint does, so the first chat request reuses the loaded model.
+export async function warmUpOllamaModel({
+  baseUrl,
+  model,
+  fetchImpl = globalThis.fetch,
+  timeoutMs = WARM_UP_TIMEOUT_MS,
+}) {
+  const origin = normalizeOllamaBaseUrl(baseUrl);
+  if (typeof fetchImpl !== "function") throw new Error("Fetch is unavailable in this Pi runtime");
+  await fetchJson(fetchImpl, `${origin}/api/generate`, { method: "POST", body: { model }, timeoutMs });
 }
 
 // Returns the first candidate origin, in order, that answers `/api/version`.

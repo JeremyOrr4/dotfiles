@@ -1,8 +1,11 @@
-import { CONTEXT_SOURCES, discoverOllamaSafely } from "./discovery.ts";
+import { CONTEXT_SOURCES, discoverOllamaSafely, warmUpOllamaModel } from "./discovery.ts";
 
 const PROVIDER_ID = "ollama-discovered";
 // Pi's default compaction.reserveTokens. Compaction runs once context exceeds the window minus this.
 const DEFAULT_RESERVE_TOKENS = 16384;
+const WARM_UP_STATUS_KEY = "ollama-warm-up";
+// Cycling through models quickly only loads the one the user stops on.
+export const WARM_UP_DELAY_MS = 300;
 
 function discover() {
   return discoverOllamaSafely({
@@ -53,9 +56,45 @@ export function formatReport(discovery, warning) {
   return lines.join("\n");
 }
 
-export default async function (pi) {
+// Loads a selected Ollama model in the background so the first prompt does not wait for it.
+function warmUpOnSelect(pi, getBaseUrl, { delayMs = WARM_UP_DELAY_MS, warmUp = warmUpOllamaModel } = {}) {
+  let timer;
+  let latest = 0;
+  pi.on("model_select", (event, ctx) => {
+    clearTimeout(timer);
+    const selection = ++latest;
+    // The session context can be replaced while a model loads; UI updates are best-effort.
+    const ui = (update) => {
+      if (selection !== latest || !ctx?.hasUI) return;
+      try {
+        update(ctx.ui);
+      } catch {}
+    };
+    ui((u) => u.setStatus(WARM_UP_STATUS_KEY, undefined));
+    if (event.model?.provider !== PROVIDER_ID) return;
+
+    const model = event.model.id;
+    timer = setTimeout(async () => {
+      ui((u) => u.setStatus(WARM_UP_STATUS_KEY, `Loading ${model} in Ollama…`));
+      try {
+        await warmUp({ baseUrl: getBaseUrl(), model });
+        ui((u) => u.setStatus(WARM_UP_STATUS_KEY, undefined));
+      } catch (error) {
+        ui((u) => {
+          u.setStatus(WARM_UP_STATUS_KEY, undefined);
+          u.notify(`Could not load ${model} in Ollama (${error?.message || "request failed"}).`, "warning");
+        });
+      }
+    }, delayMs);
+    timer.unref?.();
+  });
+}
+
+export default async function (pi, options = {}) {
   const discovery = await discover();
   const warning = register(pi, discovery);
+  let baseUrl = discovery.baseUrl;
+  warmUpOnSelect(pi, () => baseUrl, options.warmUp);
 
   if (warning) {
     let notified = false;
@@ -76,6 +115,7 @@ export default async function (pi) {
       const refreshed = await discover();
       // Keep the current models when Ollama is unreachable, so a transient failure does not empty /model.
       const refreshWarning = refreshed.reachable ? register(pi, refreshed) : refreshed.warning;
+      if (refreshed.reachable) baseUrl = refreshed.baseUrl;
       const report = formatReport(refreshed, refreshWarning);
       if (ctx.hasUI) {
         ctx.ui.notify(report, refreshWarning ? "warning" : "info");

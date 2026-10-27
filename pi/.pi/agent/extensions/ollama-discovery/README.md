@@ -14,8 +14,8 @@ Caged. It does not depend on the project directory mounted in the container.
 ## Files
 
 - `index.ts` — Pi extension entry point. Discovers models during extension
-  loading, registers the in-memory `ollama-discovered` provider, and adds the
-  `/ollama` command.
+  loading, registers the in-memory `ollama-discovered` provider, adds the
+  `/ollama` command, and warms up selected models.
 - `discovery.ts` — URL validation, Ollama HTTP requests, tag parsing, model
   metadata mapping, timeouts, and fail-open warnings.
 - `test/discovery.test.ts` — unit and local HTTP integration tests.
@@ -40,6 +40,15 @@ Caged. It does not depend on the project directory mounted in the container.
    source. If Ollama is unreachable, `/ollama` keeps the current models.
 5. On an unavailable endpoint, invalid response, or empty model list, Pi keeps
    starting and reports a warning. Existing providers are not replaced.
+6. When you switch to an `ollama-discovered` model (with `/model` or model
+   cycling), the extension sends an empty `POST /api/generate`
+   in the background so Ollama loads the model before your first prompt. The
+   status bar shows `Loading <model> in Ollama…` until it is loaded; a failure
+   is reported as a warning. Selections within 300 ms are debounced, so cycling
+   through models loads only the one you stop on. The request uses the server's
+   default options and keep-alive, the same as Pi's chat requests. Pi does not
+   emit a selection when it starts with a default model or resumes a session, so
+   those models load on the first prompt as before.
 
 The extension only registers its provider in memory. It does not write or alter
 `settings.json`, `auth.json`, or `models.json`.
@@ -124,7 +133,7 @@ node --experimental-strip-types --test \
 Tests cover URL validation and the default-URL fallback, exact model IDs,
 capability filtering, thinking levels, request compatibility settings, context
 resolution, empty/malformed/error/timeout responses, provider registration, the
-`/ollama` refresh, and hashes of existing Pi config files before and after
+`/ollama` refresh, warm-up on model selection, and hashes of existing Pi config files before and after
 registration.
 
 When changing the extension, keep discovery limited to startup and `/ollama`,

@@ -14,6 +14,7 @@ import {
   discoverOllamaModels,
   discoverOllamaSafely,
   normalizeOllamaBaseUrl,
+  warmUpOllamaModel,
 } from "../discovery.ts";
 
 function jsonResponse(body, status = 200) {
@@ -372,4 +373,70 @@ test("unavailable Ollama does not stop extension registration and reports a warn
   onSessionStart({}, { hasUI: true, ui: { notify: (message, level) => { notice = { message, level }; } } });
   assert.equal(notice.level, "warning");
   assert.match(notice.message, /Could not discover Ollama models/);
+});
+
+test("warm-up loads the model with an empty /api/generate request", async () => {
+  const requests = [];
+  const fetchImpl = async (url, options) => {
+    requests.push({ url, options });
+    return jsonResponse({ model: "qwen3:8b", done: true });
+  };
+  await warmUpOllamaModel({ baseUrl: "http://ollama.test:11434/", model: "qwen3:8b", fetchImpl });
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, "http://ollama.test:11434/api/generate");
+  assert.equal(requests[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(requests[0].options.body), { model: "qwen3:8b" });
+});
+
+test("selecting an Ollama model warms up only the last selection", async (t) => {
+  const baseUrl = await listen(t, (request, response) => {
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/api/tags") {
+      response.end(JSON.stringify({ models: [{ name: "a:latest" }, { name: "b:latest" }] }));
+      return;
+    }
+    request.resume();
+    response.end(JSON.stringify({ capabilities: ["completion", "tools"] }));
+  });
+  withEnv(t, { OLLAMA_BASE_URL: baseUrl, OLLAMA_CONTEXT_LENGTH: "8192" });
+
+  const warmed = [];
+  let fail = false;
+  const warmUp = async (request) => {
+    warmed.push(request);
+    if (fail) throw new Error("HTTP 500");
+  };
+  const pi = fakePi();
+  await extension(pi, { warmUp: { delayMs: 0, warmUp } });
+  const onModelSelect = pi.handlers.get("model_select");
+  assert.equal(typeof onModelSelect, "function");
+
+  const statuses = [];
+  const notices = [];
+  const ctx = {
+    hasUI: true,
+    ui: {
+      setStatus: (key, text) => statuses.push({ key, text }),
+      notify: (message, level) => notices.push({ message, level }),
+    },
+  };
+  const select = (provider, id) => onModelSelect({ type: "model_select", model: { provider, id }, source: "set" }, ctx);
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+  select("ollama-discovered", "a:latest");
+  select("ollama-discovered", "b:latest");
+  await settle();
+  assert.deepEqual(warmed, [{ baseUrl, model: "b:latest" }]);
+  assert.ok(statuses.some((status) => status.text === "Loading b:latest in Ollama…"));
+  assert.equal(statuses.at(-1).text, undefined);
+
+  select("anthropic", "claude-opus-5-5");
+  await settle();
+  assert.equal(warmed.length, 1, "models from other providers are not warmed up");
+
+  fail = true;
+  select("ollama-discovered", "a:latest");
+  await settle();
+  assert.equal(notices.at(-1).level, "warning");
+  assert.match(notices.at(-1).message, /Could not load a:latest in Ollama \(HTTP 500\)/);
 });
