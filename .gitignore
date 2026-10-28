@@ -1,30 +1,54 @@
-# macOS
+# OS-generated files
 .DS_Store
 
-# Neovim
+# Editor settings
+.idea/
+.vscode/
+
+# Neovim runtime files
 .nvimlog
 *.swp
 *.swo
 
-# Temporary files
-*.tmp
-*.bak
+# Temporary and backup files
 *~
+*.bak
+*.tmp
 
-# Secrets / credentials
+# Secrets and credentials
 .env
 .env.*
 *.key
 *.pem
 *.token
 
-# OS/editor junk
-.idea/
-.vscode/
-
-# Logs
+# Runtime logs
 *.log
 
+# Vendored or generated repository content
+docs/
 tmux/.config/tmux/plugins/
 
-docs/
+# Pi agent configuration
+pi/.pi/*
+!pi/.pi/agent/
+pi/.pi/agent/*
+
+# Keep the selected top-level agent files
+!pi/.pi/agent/APPEND_SYSTEM.md
+!pi/.pi/agent/AGENTS.md
+!pi/.pi/agent/SYSTEM.md
+!pi/.pi/agent/keybindings.json
+!pi/.pi/agent/mcp.json
+!pi/.pi/agent/models.json
+!pi/.pi/agent/settings.json
+
+# Keep agent resource directories, but ignore installed extension packages
+!pi/.pi/agent/extensions/
+!pi/.pi/agent/prompts/
+!pi/.pi/agent/skills/
+!pi/.pi/agent/themes/
+pi/.pi/agent/extensions/**/node_modules/
+
+# Local notes
+*.local.md
