@@ -1,6 +1,6 @@
 # Context every Ollama model runs with. Ollama's default (as small as 4K) is too small for pi.
 # Set OLLAMA_CONTEXT_LENGTH before this module loads to override it.
-export OLLAMA_CONTEXT_LENGTH="${OLLAMA_CONTEXT_LENGTH:-65536}"
+export OLLAMA_CONTEXT_LENGTH="${OLLAMA_CONTEXT_LENGTH:-16384}"
 
 # (Re)starts the Homebrew Ollama service with OLLAMA_CONTEXT_LENGTH. The service does not read the
 # shell environment, and launchctl setenv is lost on reboot, so run this instead of brew services.
