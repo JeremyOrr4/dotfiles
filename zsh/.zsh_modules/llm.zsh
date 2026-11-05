@@ -1,32 +1,38 @@
-# # Context every Ollama model runs with. Ollama's default (as small as 4K) is too small for pi.
-# # Set OLLAMA_CONTEXT_LENGTH before this module loads to override it.
-# export OLLAMA_CONTEXT_LENGTH="${OLLAMA_CONTEXT_LENGTH:-16384}"
-#
-# # (Re)starts the Homebrew Ollama service with OLLAMA_CONTEXT_LENGTH. The service does not read the
-# # shell environment, and launchctl setenv is lost on reboot, so run this instead of brew services.
-# ollama-start() {
-#     local cmd
-#     for cmd in brew launchctl; do
-#         if ! command -v "$cmd" >/dev/null 2>&1; then
-#             echo "ollama-start: required command not found: $cmd" >&2
-#             return 1
-#         fi
-#     done
-#
-#     launchctl setenv OLLAMA_CONTEXT_LENGTH "$OLLAMA_CONTEXT_LENGTH" || return 1
-#     brew services restart ollama || return 1
-#     echo "Ollama started with OLLAMA_CONTEXT_LENGTH=$OLLAMA_CONTEXT_LENGTH; check the CONTEXT column of 'ollama ps' after loading a model."
-# }
-#
-# # launchd forgets the value on reboot or logout, so the first interactive shell afterwards sets it
-# # again. If brew services already started Ollama with the default, restart it; otherwise only set
-# # the value so a later brew services start uses it. An existing value is left alone, which keeps a
-# # one-off OLLAMA_CONTEXT_LENGTH=... ollama-start in place.
-# if [[ -o interactive && "$OSTYPE" == darwin* ]] && command -v launchctl >/dev/null 2>&1 \
-#     && [[ -z "$(launchctl getenv OLLAMA_CONTEXT_LENGTH)" ]]; then
-#     if pgrep -x ollama >/dev/null 2>&1; then
-#         ollama-start
-#     else
-#         launchctl setenv OLLAMA_CONTEXT_LENGTH "$OLLAMA_CONTEXT_LENGTH"
-#     fi
-# fi
+# ==========================================
+# Ollama Configuration
+# ==========================================
+
+# Default context length
+export OLLAMA_CONTEXT_LENGTH="${OLLAMA_CONTEXT_LENGTH:-16384}"
+
+# Start Ollama with an optional context argument
+ollama-start() {
+    local context="${1:-16k}"
+
+    case "$context" in
+        8k|8K)   context=8192 ;;
+        16k|16K) context=16384 ;;
+        24k|24K) context=24576 ;;
+        32k|32K) context=32768 ;;
+        64k|64K) context=65536 ;;
+        *)
+            echo "Usage: ollama-start [8k|16k|24k|32k|64k]"
+            return 1
+            ;;
+    esac
+
+    if ! command -v brew >/dev/null 2>&1 || ! command -v launchctl >/dev/null 2>&1; then
+        echo "ollama-start: brew and launchctl are required." >&2
+        return 1
+    fi
+
+    export OLLAMA_CONTEXT_LENGTH="$context"
+
+    echo "Starting Ollama..."
+    echo "Context length: ${context} tokens"
+
+    launchctl setenv OLLAMA_CONTEXT_LENGTH "$context" || return 1
+    brew services restart ollama || return 1
+
+    echo "Ollama started successfully."
+}
